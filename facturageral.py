@@ -7,10 +7,11 @@ st.set_page_config(page_title="Conversão de dados Script Faturação",
                    page_icon=":bar_chart:")
 
 # Cabeçalho original
-colunas = ['BOA IND', 'EMP ID', 'UNIDADE', 'PRODUTO', 'DT PROC', 'DT FACT', 'NR FACT', 'CLI ID', 'CLI CONTA', 'CIL',
-           'TP FACT', 'TP CLI', 'COD TARIFA', 'VAL TOT', 'CONCEITO', 'QTDE', 'VALOR']
+colunas = ['BOA IND', 'EMP ID', 'UNIDADE', 'PRODUTO', 'DT PROC', 'DT FACT', 'NR FACT',
+           'CLI ID', 'CLI CONTA', 'CIL', 'TP FACT', 'TP CLI', 'COD TARIFA', 'VAL TOT',
+           'CONCEITO', 'QTDE', 'VALOR']
 
-# Tabela Unidade
+# Tabelas auxiliares
 unidade = pd.DataFrame([
     ['10201000', 'Praia'], ['10202000', 'São Domingos'], ['10203000', 'Santa Catarina'],
     ['10204000', 'Tarrafal'], ['10205000', 'Calheta'], ['10206000', 'Santa Cruz'],
@@ -23,7 +24,6 @@ unidade = pd.DataFrame([
 ], columns=['UNIDADE', 'Unidade'])
 unidade['UNIDADE'] = unidade['UNIDADE'].astype(int)
 
-# Região
 regiao = pd.DataFrame([
     ['Praia', 'SUL'], ['São Domingos', 'SUL'], ['Santa Catarina', 'SUL'], ['Tarrafal', 'SUL'],
     ['Calheta', 'SUL'], ['Santa Cruz', 'SUL'], ['Mosteiros', 'SUL'], ['São Filipe', 'SUL'],
@@ -33,13 +33,11 @@ regiao = pd.DataFrame([
     ['Tarrafal S.Nicolau', 'NORTE']
 ], columns=['Unidade', 'Região'])
 
-# Produto
 produto = pd.DataFrame([
     ['EB', 'Baixa Tensão'], ['EE', 'Baixa Tensão Especial'],
     ['EM', 'Media Tensão'], ['AG', 'Agua']
 ], columns=['PRODUTO', 'Produto'])
 
-# Tipo Cliente
 tip_client = pd.DataFrame([
     ['72', 'Empresa Publica'], ['82', 'Colectivos'], ['93', 'Industriais'], ['94', 'Construção'],
     ['73', 'Estado-Patrimonio'], ['91', 'Domésticos'], ['92', 'Comércio, Industria, Agricul.'],
@@ -47,7 +45,6 @@ tip_client = pd.DataFrame([
     ['71', 'Estado-Tesouro'], ['XX', 'Clientes Senhas de Água']
 ], columns=['TP CLI', 'Tipo_Cliente'])
 
-# Tipo Fatura
 tp_fact = pd.DataFrame([
     ['11', 'Em Ciclo Leitura'], ['12', 'Em Ciclo Estimativa'], ['22', 'Baixa Voluntária'],
     ['23', 'Baixa por Dívida'], ['24', 'Alterações Contratuais'], ['28', 'Baixa Forçada'],
@@ -55,7 +52,6 @@ tp_fact = pd.DataFrame([
     ['39', 'Facturação Diversa'], ['99', 'Lig Relig CompPg']
 ], columns=['TP FACT', 'Tipo_Factura'])
 
-# Tarifa
 tarifa = pd.DataFrame([
     ['A1', 'Tarifa Água I'], ['A2', 'Tarifa Água II'], ['A3', 'Tarifa Água III B'],
     ['A4', 'Tarifa Água III A'], ['AD', 'ADA'], ['AP', 'Água Praia'], ['B4', 'Autotanques II'],
@@ -72,7 +68,7 @@ tarifa = pd.DataFrame([
     ['TBP', 'Trabalhador Partilhado'], ['TBB', 'Trab. Beneficiário']
 ], columns=['COD TARIFA', 'Tarifa'])
 
-# Função principal para carregar e tratar os dados
+# Função principal
 @st.cache_data
 def carregar_facturacao(uploaded_file):
     content = uploaded_file.read().decode("utf-8")
@@ -81,7 +77,8 @@ def carregar_facturacao(uploaded_file):
     df = pd.merge(df, unidade, on='UNIDADE', how='left')
     df = pd.merge(df, regiao, on='Unidade', how='left')
     df = pd.merge(df, produto, on='PRODUTO', how='left')
-    df['TP CLI'] = df['TP CLI'].astype(str)
+
+    df['TP CLI'] = df['TP CLI'].astype(str).str.strip()
     df = pd.merge(df, tip_client, on='TP CLI', how='left')
     df = pd.merge(df, tp_fact, on='TP FACT', how='left')
     df = pd.merge(df, tarifa, on='COD TARIFA', how='left')
@@ -102,25 +99,31 @@ def carregar_facturacao(uploaded_file):
 uploaded_file = st.file_uploader("Escolha um arquivo", type=["txt"])
 
 if uploaded_file is not None:
-    fact5 = carregar_facturacao(uploaded_file)
+    try:
+        fact5 = carregar_facturacao(uploaded_file)
 
-    # Filtro por Região
-    st.sidebar.header("Filtrar Região:")
-    reg = st.sidebar.multiselect("Filtrar Região", options=fact5['Região'].unique())
-    geral_selection2 = fact5.query("`Região` == @reg") if reg else fact5
+        st.write("Pré-visualização dos dados tratados:")
+        st.dataframe(fact5.head(), use_container_width=True)
 
-    st.dataframe(geral_selection2, use_container_width=True)
+        # Filtro por Região
+        st.sidebar.header("Filtrar Região:")
+        reg = st.sidebar.multiselect("Filtrar Região", options=fact5['Região'].unique())
+        geral_selection2 = fact5.query("`Região` == @reg") if reg else fact5
 
-    # Conversão e download CSV
-    @st.cache_data
-    def convert_df2(df):
-        return df.to_csv(sep=';', decimal=',').encode('utf-8-sig')
+        st.dataframe(geral_selection2, use_container_width=True)
 
-    csv = convert_df2(geral_selection2)
+        @st.cache_data
+        def convert_df2(df):
+            return df.to_csv(sep=';', decimal=',').encode('utf-8-sig')
 
-    st.download_button(
-        label="Download Facturação",
-        data=csv,
-        file_name='Facturação.csv',
-        mime='text/csv',
-    )
+        csv = convert_df2(geral_selection2)
+
+        st.download_button(
+            label="Download Facturação",
+            data=csv,
+            file_name='Facturação.csv',
+            mime='text/csv',
+        )
+
+    except Exception as e:
+        st.error(f"Erro ao processar o ficheiro: {e}")
